@@ -5,18 +5,21 @@ Example usage:
     python demo.py --input_path sample_data/input.mp4 --keyword garden --output_path sample_data/output_garden.mp4
     python demo.py --input_path sample_data/input.mp4 --keyword tree --output_path sample_data/output_tree.mp4
 """
-import argparse
-import math
-import os
-import pickle as pkl
-from pathlib import Path
 
-import cv2
-import numpy as np
-import torch
-from sklearn.metrics import pairwise_distances
-from tqdm import tqdm
+import argparse     # pass argument into the shell (when calling the program "demo.py")
+import math         # maths things
+import os           # interact with the os
+import pickle as pkl    # to save any Python object on a binary file (pickle.dump(myObj, myFile) to save, pickle.load(myFile) to load
+from pathlib import Path    # to navigate through files tree
 
+import cv2          # OpenCV : computer vision / image processing library
+import numpy as np  # modules for basic tensors, scientific computation
+import torch        # PyTorch, module for NN, models, passforward....
+from sklearn.metrics import pairwise_distances  # module to compute distances
+from tqdm import tqdm   # module to display loading bar
+
+
+# see utils.py for the complete documentation
 from utils import (
     load_model,
     load_rgb_video,
@@ -26,6 +29,7 @@ from utils import (
 )
 
 
+############# MAIN FUNCTION #############
 def main(
     checkpoint_path: Path,
     bsldict_metadata_path: Path,
@@ -67,73 +71,121 @@ def main(
     :param stride: how many frames to stride when applying sliding windows to the input video (1 obtains best performance)
     :param num_in_frames: number of frames processed at a time by the model (I3D model is trained with 16 frames)
     :param fps: the frame rate at which to read the input video
-    :param embd_dim: the video feature dimensionality, always 256 for the MLP model output.
+    :param embd_dim: the video feature dimensionality, always 256 for the MLP model output. --> what is this param...?
     """
+
+    #=================================================================================
+    #=============================== Preprocessing ===================================
+    #=================================================================================
+
+    #=============================== BSLDict loading ===============================
+    # check if the BSLDict is downloaded
     msg = "Please download the BSLDict metadata at bsldict/download_bsldict_metadata.sh"
     assert bsldict_metadata_path.exists(), msg
-    print(f"Loading BSLDict data (words & features) from {bsldict_metadata_path}")
-    with open(bsldict_metadata_path, "rb") as f:
-        bsldict_metadata = pkl.load(f)
 
-    msg = f"Search item '{keyword} does not exist in the sign dictionary."
+    print(f"Loading BSLDict data (words & features) from {bsldict_metadata_path}")
+    with open(bsldict_metadata_path, "rb") as f:    #"rb" : open a file with reading (r) in binary (b)
+        bsldict_metadata = pkl.load(f)  #load pkl : fichier binaire --> obj python
+
+
+    # check if the keyword is in the BSLDict
+    msg = f"Search item '{keyword}' does not exist in the sign dictionary."
     assert keyword in bsldict_metadata["words"], msg
 
-    # Find dictionary videos whose sign corresponds to the search key
-    dict_ix = np.where(np.array(bsldict_metadata["videos"]["word"]) == keyword)[0]
+    # Find dictionary videos whose sign corresponds to the searched key
+    dict_ix = np.where(np.array(bsldict_metadata["videos"]["word"]) == keyword)[0]  # indexes of videos correspondig to the keyword (in bsldict)
     print(f"Found {len(dict_ix)} dictionary videos for the keyword {keyword}.")
-    dict_features = np.array(bsldict_metadata["videos"]["features"]["mlp"])[dict_ix]
-    dict_video_urls = np.array(bsldict_metadata["videos"]["video_link_db"])[dict_ix]
-    dict_youtube_ids = np.array(bsldict_metadata["videos"]["youtube_identifier_db"])[
-        dict_ix
-    ]
+
+    dict_features = np.array(bsldict_metadata["videos"]["features"]["mlp"])[dict_ix]    # What are features exactly...?
+    dict_video_urls = np.array(bsldict_metadata["videos"]["video_link_db"])[dict_ix]    # URLS of corresponding videos
+    dict_youtube_ids = np.array(bsldict_metadata["videos"]["youtube_identifier_db"])[dict_ix]   # Dictonary on youtube ...?
+
+    # Print found videos
     for vi, v in enumerate(dict_video_urls):
         print(f"v{vi + 1}: {v}")
 
+
+    #=============================== MODEL loading ===============================
+    # Check if the model is downloaded
     msg = "Please download the pretrained model at models/download_models.sh"
     assert checkpoint_path.exists(), msg
+
+    # Loading the pretrained nural network
     print(f"Loading model from {checkpoint_path}")
-    model = load_model(checkpoint_path=checkpoint_path)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = load_model(checkpoint_path=checkpoint_path) # function for utils.py that allow to load a pre-trained model (torch.nn)
+
+    # Hardware configuration
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")   # check if there is a GPU on the computer (if not, move to CPU)
     print(f"Moving model to {device}")
-    model = model.to(device)
-    # Load the continuous RGB video input
-    rgb_orig = load_rgb_video(video_path=input_path, fps=fps,)
-    # Prepare: resize/crop/normalize
+    model = model.to(device)    # Torch function that moving the model on GPU (if there is) else on CPU
+
+
+    #=============================== INPUT VIDEO loading ===============================
+    # Load the continuous RGB video INPUT from a Path to a Torch Tensor
+    rgb_orig = load_rgb_video(video_path=input_path, fps=fps, )
+
+    # Prepare: function of utils.py that resize to [256x256], center crop with [224x224], normalize colors in [-0.5;+ 0.5]
     rgb_input = prepare_input(rgb_orig)
-    # Sliding window
-    rgb_slides, t_mid = sliding_windows(
-        rgb=rgb_input, stride=stride, num_in_frames=num_in_frames,
-    )
+
+    # Sliding window : rgb_slides (sliding windows) and t_mid (corresponding (middle) timestamp)
+    # It produce a tensor of num_clips of clips (each of num_in_frames frame) in RGB with rgb_input[i,j] shapes
+    rgb_slides, t_mid = sliding_windows(rgb=rgb_input, stride=stride, num_in_frames=num_in_frames)
+
+
     # Number of windows/clips
     num_clips = rgb_slides.shape[0]
-    # Group the clips into batches
+
+    # Group the clips into batches --> to feed the model batch by batch
     num_batches = math.ceil(num_clips / batch_size)
-    continuous_features = np.empty((0, embd_dim), dtype=float)
-    for b in range(num_batches):
-        inp = rgb_slides[b * batch_size : (b + 1) * batch_size]
-        inp = inp.to(device)
+    continuous_features = np.empty((0, embd_dim), dtype=float)  # contain the output of the model for all batches
+
+
+
+    #=================================================================================
+    #=============================== Feeding the model ===============================
+    #=================================================================================
+    for b in tqdm(range(num_batches)):
+        inp = rgb_slides[b * batch_size : (b + 1) * batch_size] # input of the model
+        inp = inp.to(device)    # move the torch Tensor on the GPU/CPU
         # Forward pass
         out = model(inp)
+        # Append the solution to the continous_features
         continuous_features = np.append(
             continuous_features, out["embds"].cpu().detach().numpy(), axis=0
         )
-    # Compute distance between continuous and dictionary features
-    dst = pairwise_distances(continuous_features, dict_features, metric="cosine")
+
+
+
+    #===========================================================================
+    #========================= compaire the output with the dict ===============
+    #===========================================================================
+
+    # Compute distance between continuous and dictionary features (Cosine distance <--> normalized dot product)
+    dst = pairwise_distances(continuous_features, dict_features, metric="cosine")   # matrix dot product normalized [num_clips, num_dict_video]
     # Convert to [0, 1] similarity. Dimensionality: [ContinuousTimes x DictionaryVersions]
     sim = 1 - dst / 2
+
     # Time where the similarity peaks
     peak_ix = sim.max(axis=1).argmax()
     # Dictionary version which responds with highest similarity
     version_ix = sim.argmax(axis=1)[peak_ix]
     max_sim = sim[peak_ix, version_ix]
+
     # If above a threhsold: spotted
-    if sim[peak_ix, version_ix] >= similarity_thres:
+    if max_sim >= similarity_thres:
         print(
             f"Sign '{keyword}' spotted at timeframe {peak_ix} "
             f"with similarity {max_sim:.2f} for the dictionary version {version_ix + 1}."
         )
     else:
         print(f"Sign {keyword} not spotted.")
+
+
+
+
+    #===========================================================
+    #========================= exporting results ===============
+    #===========================================================
 
     # Visualize similarity plot
     if viz:
@@ -155,7 +207,6 @@ def main(
             cmd = f"ffmpeg -loglevel panic -y -i {output_path} -f gif {gif_path}"
             print(f"Generating gif of output at {gif_path}")
             os.system(cmd)
-
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Helper script to run demo.")
@@ -184,7 +235,9 @@ if __name__ == "__main__":
         help="Path to test video.",
     )
     p.add_argument(
-        "--viz", type=int, default=1, help="Whether to visualize the predictions."
+        "--viz", type=int,
+        default=0,
+        help="Whether to visualize the predictions."
     )
     p.add_argument(
         "--output_path",
@@ -195,7 +248,7 @@ if __name__ == "__main__":
     p.add_argument(
         "--viz_with_dict",
         type=bool,
-        default=1,
+        default=0,
         help="Whether to download dictionary videos for visualization.",
     )
     p.add_argument(
@@ -213,7 +266,7 @@ if __name__ == "__main__":
     p.add_argument(
         "--batch_size",
         type=int,
-        default=10,
+        default=3,
         help="Maximum number of clips to put in each batch",
     )
     p.add_argument(

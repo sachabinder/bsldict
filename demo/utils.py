@@ -1,6 +1,6 @@
-import math
-import os
-import shutil
+import math # maths stuff
+import os   # manipualte the OS
+import shutil   # modules to operate on files
 import sys
 import time
 from pathlib import Path
@@ -20,6 +20,7 @@ from bsldict.download_videos import download_hosted_video, download_youtube_vide
 from models.i3d_mlp import i3d_mlp
 
 
+#=================== Output processing ===================
 def viz_similarities(
     rgb: torch.Tensor,
     t_mid: np.ndarray,
