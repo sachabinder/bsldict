@@ -84,6 +84,63 @@ def main(
     assert bsldict_metadata_path.exists(), msg
 
     print(f"Loading BSLDict data (words & features) from {bsldict_metadata_path}")
+    """
+    Structure of bsldict_metadata (<class 'dict'>)
+    bsldict_metadata = {
+        "words" : <class 'list'> = [list of all words used (len 9283)],
+        "words_to_id : <class 'dict'> = {bsldict_metadata["words"][i]:i for i in range(len(bsldict_metadata["words"]))},
+        "videos" : <class 'dict'> = {
+            "word" : <class 'list'> = [list of all words in videos (len 14122)],
+            "word_id" : <class 'list'> = [list of all word ids in videos (len 14122)],
+            "alternative_ix" : <class 'list'> = alternate traduction id ...?,
+            "alternative_words" : <class 'list'> = alternate translation ...?,
+            "videos_original" : <class 'dict'> = {
+                "T" : <class 'list'> = [list of total number of frames in each videos (len 14122)],
+                "W" : <class 'list'> = [list of width of each videos (len 14122)],
+                "H" : <class 'list'> = [list of height of each videos (len 14122)],
+                "duration_sec" : <class 'list'> = [list of duration of each videos in sec (len 14122)],
+                "fps" : <class 'list'> = [list of fps rate in each videos (len 14122)]
+            },
+            "videos_360h_25fps" : <class 'dict'> = {
+                "T" : <class 'list'> = [list of total number of frames in each videos (len 14122)],
+                "W" : <class 'list'> = [list of width of each videos (len 14122)],
+                "H" : <class 'list'> = [list of height of each videos (len 14122)],
+                "duration_sec" : <class 'list'> = [list of duration of each videos in sec (len 14122)],
+                "fps" : <class 'list'> = [list of fps rate in each videos (len 14122)]
+            },
+            "letter_db" : <class 'list'> = list of letters...?,
+            "page_db" : <class 'list'> = list of the page on website...?,
+            "sign_cnt_db" : <class 'list'> = list of int ...?,
+            "sign_text_db" : <class 'list'> = [list of signs made in each videos (len 14122)],
+            "sign_link_db" : <class 'list'> = [list of URLs where each videos can be found at the corresponding 
+                sign webpage https://www.signbsl.com/bsldict_metadata["videos"]["sign_link_db"][k] (len 14122)],
+            "version_cnt_db" : <class 'list'> = number of other version...?,
+            "how_to_db" : <class 'list'> = example of uses of each words,
+            "see_also_db" : <class 'list'> = other suggestion of words to see,
+            "similar_items_db" : <class 'list'> = similar words,
+            "categories_db" : <class 'list'> = list of lists that enumerate categories,
+            "within_this_cat_db" : <class 'list'> = other words in this category,
+            "video_cnt_in_version_db" : <class 'list(len 14122)'> = ...?,
+            "video_cnt_in_sign_db" : <class 'list'> = number of video of each sign,
+            "sign_text_orig_db" : <class 'list'> = original text of the sign,
+            "video_link_db" : <class 'list'> = link of each videos (YT and, signbsl.com),
+            "source_site_db" : <class 'list'> = source of each videos,
+            "download_method_db" : <class 'list'> = tells if we need a youtube DL or wget for each videos, 
+            "upload_date_db" : <class 'list'> = date of upload of each videos with format 'YEAR-MONTH-DAYTHOUR:MIN:SEC+00:00',
+            "name" : <class 'list'> = names of each files,
+            "bbox_openpose" : <class 'list'> = ...?,
+            "bbox" : <class 'list'> = ...?,
+            "temp_interval" : <class 'list'> = ...?,
+            "features" : <class 'dict'> = {
+                "i3d" : <class 'list'> = [out of i3d model (vector of 1024) for each videos (len 14122)],
+                "mlp" : <class 'list'> = [out of mlp model (vector of 256) for each videos (len 14122)]
+            },
+            "youtube_identifier_db" : <class 'list'> = [list of YT ids if the video is on YT, else None (len 14122)]
+        },
+        "words_normalised" : <class 'list'> = [list of all words used normalized (len 9283)]
+    }
+    
+    """
     with open(bsldict_metadata_path, "rb") as f:    #"rb" : open a file with reading (r) in binary (b)
         bsldict_metadata = pkl.load(f)  #load pkl : fichier binaire --> obj python
 
@@ -96,9 +153,9 @@ def main(
     dict_ix = np.where(np.array(bsldict_metadata["videos"]["word"]) == keyword)[0]  # indexes of videos correspondig to the keyword (in bsldict)
     print(f"Found {len(dict_ix)} dictionary videos for the keyword {keyword}.")
 
-    dict_features = np.array(bsldict_metadata["videos"]["features"]["mlp"])[dict_ix]    # What are features exactly...?
+    dict_features = np.array(bsldict_metadata["videos"]["features"]["mlp"])[dict_ix]    # out of the model for dict videos
     dict_video_urls = np.array(bsldict_metadata["videos"]["video_link_db"])[dict_ix]    # URLS of corresponding videos
-    dict_youtube_ids = np.array(bsldict_metadata["videos"]["youtube_identifier_db"])[dict_ix]   # Dictonary on youtube ...?
+    dict_youtube_ids = np.array(bsldict_metadata["videos"]["youtube_identifier_db"])[dict_ix]   # Some datas are on YT
 
     # Print found videos
     for vi, v in enumerate(dict_video_urls):
@@ -112,7 +169,7 @@ def main(
 
     # Loading the pretrained nural network
     print(f"Loading model from {checkpoint_path}")
-    model = load_model(checkpoint_path=checkpoint_path) # function for utils.py that allow to load a pre-trained model (torch.nn)
+    model = load_model(checkpoint_path=checkpoint_path) # function from utils.py that allow to load a pre-trained model (torch.nn)
 
     # Hardware configuration
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")   # check if there is a GPU on the computer (if not, move to CPU)
@@ -122,7 +179,7 @@ def main(
 
     #=============================== INPUT VIDEO loading ===============================
     # Load the continuous RGB video INPUT from a Path to a Torch Tensor
-    rgb_orig = load_rgb_video(video_path=input_path, fps=fps, )
+    rgb_orig = load_rgb_video(video_path=input_path, fps=fps)
 
     # Prepare: function of utils.py that resize to [256x256], center crop with [224x224], normalize colors in [-0.5;+ 0.5]
     rgb_input = prepare_input(rgb_orig)
@@ -135,7 +192,7 @@ def main(
     # Number of windows/clips
     num_clips = rgb_slides.shape[0]
 
-    # Group the clips into batches --> to feed the model batch by batch
+    # Group clips into batches --> to feed the model batch by batch
     num_batches = math.ceil(num_clips / batch_size)
     continuous_features = np.empty((0, embd_dim), dtype=float)  # contain the output of the model for all batches
 
@@ -161,8 +218,8 @@ def main(
     #===========================================================================
 
     # Compute distance between continuous and dictionary features (Cosine distance <--> normalized dot product)
-    dst = pairwise_distances(continuous_features, dict_features, metric="cosine")   # matrix dot product normalized [num_clips, num_dict_video]
-    # Convert to [0, 1] similarity. Dimensionality: [ContinuousTimes x DictionaryVersions]
+    dst = pairwise_distances(continuous_features, dict_features, metric="cosine")   # matrix of normalized dot product [num_clips, num_dict_video]
+    # Convert from [-1,1] to [0, 1] similarity. Dimensionality: [ContinuousTimes x DictionaryVersions]
     sim = 1 - dst / 2
 
     # Time where the similarity peaks
@@ -200,6 +257,7 @@ def main(
             output_path=output_path,
             viz_with_dict=viz_with_dict,
             dict_video_links=(dict_video_urls, dict_youtube_ids),
+            num_in_frames=num_in_frames
         )
         # Generate a gif
         if gen_gif:
@@ -207,6 +265,8 @@ def main(
             cmd = f"ffmpeg -loglevel panic -y -i {output_path} -f gif {gif_path}"
             print(f"Generating gif of output at {gif_path}")
             os.system(cmd)
+
+
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Helper script to run demo.")
@@ -236,7 +296,7 @@ if __name__ == "__main__":
     )
     p.add_argument(
         "--viz", type=int,
-        default=0,
+        default=1,
         help="Whether to visualize the predictions."
     )
     p.add_argument(
@@ -248,7 +308,7 @@ if __name__ == "__main__":
     p.add_argument(
         "--viz_with_dict",
         type=bool,
-        default=0,
+        default=1,
         help="Whether to download dictionary videos for visualization.",
     )
     p.add_argument(
@@ -266,7 +326,7 @@ if __name__ == "__main__":
     p.add_argument(
         "--batch_size",
         type=int,
-        default=3,
+        default=1,
         help="Maximum number of clips to put in each batch",
     )
     p.add_argument(

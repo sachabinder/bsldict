@@ -6,11 +6,13 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-
-def download_hosted_video(video_link, output_path):
+# =================== Download functions ===================
+def download_hosted_video(video_link: str, output_path: Path):
     """
-        Given the link to a video, download
-            using wget into output_file location.
+    Given the link to a video, download using wget into output_file location.
+
+    :param video_link: URL of the video to download
+    :param output_path: local path where the video will be download
     """
     command = ["wget", "-O", f"{output_path}", f'"{video_link}"']
     command = " ".join(command)
@@ -21,10 +23,12 @@ def download_hosted_video(video_link, output_path):
         pass
 
 
-def download_youtube_video(video_identifier, output_path):
+def download_youtube_video(video_identifier: str, output_path: Path):
     """
-        Given the youtube video_identifier, download
-            using youtube-dl into output_path location.
+    Given the youtube video_identifier, download using youtube-dl into output_path location.
+
+    :param video_identifier: Youtube id of the video to download
+    :param output_path: local path where the video will be download
     """
     url_base = "https://www.youtube.com/watch?v="
     command = [
@@ -42,7 +46,7 @@ def download_youtube_video(video_identifier, output_path):
         print(f"Video not downloaded: {err}.")
         pass
 
-
+# =================== Download all BSLDict ===================
 def main(data_path: Path):
     if not data_path.exists():
         data_path.mkdir()
