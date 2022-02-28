@@ -19,9 +19,13 @@ def dict_structure(data: dict, marker: str = "  "):
             print(marker, key, " -- ", type(val))
 
 if __name__ == "__main__":
-    file_path = "info_v00_20.03.30.pkl"
+    file_path1 = "info_v00_20.03.30.pkl"
+    file_path2 = "bsldict_v1.pkl"
 
-    with open(file_path, "rb") as f:  # "rb" : open a file with reading (r) in binary (b)
-        data = pkl.load(f)  # load pkl : fichier binaire --> obj python
+    with open(file_path1, "rb") as f:  # "rb" : open a file with reading (r) in binary (b)
+        data1 = pkl.load(f)  # load pkl : fichier binaire --> obj python
+
+    with open(file_path2, "rb") as f:  # "rb" : open a file with reading (r) in binary (b)
+        data2 = pkl.load(f)  # load pkl : fichier binaire --> obj python
 
     dict_structure(data)

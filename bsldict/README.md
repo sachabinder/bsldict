@@ -106,17 +106,12 @@ The contents of `info_v00_20.03.30.pkl` file is structured as follows:
         video_link_db           # link to the video file (either .mp4 file or youtube link)
         source_site_db          # Signstation, Scottish Sensory Centre, QIA Dictionary of ICT,  Nathanael Farley, University of Wolverhampton, Karl O'Keeffe ... (might be missing)
         download_method_db      # wget | youtube-dl
-        youtube_identifier_db   # youtube id if a youtube link, None otherwise
         upload_date_db          # upload date (might be missing)
         
         # The following two items are from our extractions using OpenPose
         bbox                    # normalised [0, 1] bounding box coordinates [y0, x0, y1, x1]
         temp_interval           # the beginning and end frame indices (inclusive) that have high motion (higher than 5 pixels distance) for wrists
-        # Dictionary containing our I3D and MLP feature extractions
-        ["features"]{
-            i3d                 # 1024-dimensional I3D features (randomly sampled 16f clip features are averaged)
-            mlp                 # 256-dimensional MLP features (used for sign spotting)
-        }
+
         # Dictionary containing video resolution information for the original videos
         ["videos_original"]{
             T                   # number of frames
