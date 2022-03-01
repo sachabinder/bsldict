@@ -33,4 +33,4 @@ class i3d_mlp(torch.nn.Module):
         x = i3d_outputs["embds"].squeeze(2).squeeze(2).squeeze(2)
         # Get embds from mlp (unused logits from mlp)
         embds = self.mlp(x)["embds"]
-        return {"logits": logits, "embds": embds}
+        return {"logits": x, "embds": embds}

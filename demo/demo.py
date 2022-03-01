@@ -44,7 +44,9 @@ def main(
     stride: int = 1,
     num_in_frames: int = 16,
     fps: int = 25,
-    embd_dim: int = 256,
+    mlp: bool = 1,
+    embd_dim_i3d: int = 1024,
+    embd_dim_mlp: int = 256,
 ):
     """
     Run sign spotting demo:
@@ -71,7 +73,9 @@ def main(
     :param stride: how many frames to stride when applying sliding windows to the input video (1 obtains best performance)
     :param num_in_frames: number of frames processed at a time by the model (I3D model is trained with 16 frames)
     :param fps: the frame rate at which to read the input video
-    :param embd_dim: the video feature dimensionality, always 256 for the MLP model output. --> what is this param...?
+    :param embd_dim_i3d: the video feature dimensionality, always 1024 for I3D model output
+    :param embd_dim_mlp: the video feature dimensionality, always 256 for the MLP model output
+    :param mlp: if 1 based on mlp output else i3d
     """
 
     #=================================================================================
@@ -84,63 +88,7 @@ def main(
     assert bsldict_metadata_path.exists(), msg
 
     print(f"Loading BSLDict data (words & features) from {bsldict_metadata_path}")
-    """
-    Structure of bsldict_metadata (<class 'dict'>)
-    bsldict_metadata = {
-        "words" : <class 'list'> = [list of all words used (len 9283)],
-        "words_to_id : <class 'dict'> = {bsldict_metadata["words"][i]:i for i in range(len(bsldict_metadata["words"]))},
-        "videos" : <class 'dict'> = {
-            "word" : <class 'list'> = [list of all words in videos (len 14122)],
-            "word_id" : <class 'list'> = [list of all word ids in videos (len 14122)],
-            "alternative_ix" : <class 'list'> = alternate traduction id ...?,
-            "alternative_words" : <class 'list'> = alternate translation ...?,
-            "videos_original" : <class 'dict'> = {
-                "T" : <class 'list'> = [list of total number of frames in each videos (len 14122)],
-                "W" : <class 'list'> = [list of width of each videos (len 14122)],
-                "H" : <class 'list'> = [list of height of each videos (len 14122)],
-                "duration_sec" : <class 'list'> = [list of duration of each videos in sec (len 14122)],
-                "fps" : <class 'list'> = [list of fps rate in each videos (len 14122)]
-            },
-            "videos_360h_25fps" : <class 'dict'> = {
-                "T" : <class 'list'> = [list of total number of frames in each videos (len 14122)],
-                "W" : <class 'list'> = [list of width of each videos (len 14122)],
-                "H" : <class 'list'> = [list of height of each videos (len 14122)],
-                "duration_sec" : <class 'list'> = [list of duration of each videos in sec (len 14122)],
-                "fps" : <class 'list'> = [list of fps rate in each videos (len 14122)]
-            },
-            "letter_db" : <class 'list'> = list of letters...?,
-            "page_db" : <class 'list'> = list of the page on website...?,
-            "sign_cnt_db" : <class 'list'> = list of int ...?,
-            "sign_text_db" : <class 'list'> = [list of signs made in each videos (len 14122)],
-            "sign_link_db" : <class 'list'> = [list of URLs where each videos can be found at the corresponding 
-                sign webpage https://www.signbsl.com/bsldict_metadata["videos"]["sign_link_db"][k] (len 14122)],
-            "version_cnt_db" : <class 'list'> = number of other version...?,
-            "how_to_db" : <class 'list'> = example of uses of each words,
-            "see_also_db" : <class 'list'> = other suggestion of words to see,
-            "similar_items_db" : <class 'list'> = similar words,
-            "categories_db" : <class 'list'> = list of lists that enumerate categories,
-            "within_this_cat_db" : <class 'list'> = other words in this category,
-            "video_cnt_in_version_db" : <class 'list(len 14122)'> = ...?,
-            "video_cnt_in_sign_db" : <class 'list'> = number of video of each sign,
-            "sign_text_orig_db" : <class 'list'> = original text of the sign,
-            "video_link_db" : <class 'list'> = link of each videos (YT and, signbsl.com),
-            "source_site_db" : <class 'list'> = source of each videos,
-            "download_method_db" : <class 'list'> = tells if we need a youtube DL or wget for each videos, 
-            "upload_date_db" : <class 'list'> = date of upload of each videos with format 'YEAR-MONTH-DAYTHOUR:MIN:SEC+00:00',
-            "name" : <class 'list'> = names of each files,
-            "bbox_openpose" : <class 'list'> = ...?,
-            "bbox" : <class 'list'> = ...?,
-            "temp_interval" : <class 'list'> = ...?,
-            "features" : <class 'dict'> = {
-                "i3d" : <class 'list'> = [out of i3d model (vector of 1024) for each videos (len 14122)],
-                "mlp" : <class 'list'> = [out of mlp model (vector of 256) for each videos (len 14122)]
-            },
-            "youtube_identifier_db" : <class 'list'> = [list of YT ids if the video is on YT, else None (len 14122)]
-        },
-        "words_normalised" : <class 'list'> = [list of all words used normalized (len 9283)]
-    }
-    
-    """
+
     with open(bsldict_metadata_path, "rb") as f:    #"rb" : open a file with reading (r) in binary (b)
         bsldict_metadata = pkl.load(f)  #load pkl : fichier binaire --> obj python
 
@@ -153,7 +101,12 @@ def main(
     dict_ix = np.where(np.array(bsldict_metadata["videos"]["word"]) == keyword)[0]  # indexes of videos correspondig to the keyword (in bsldict)
     print(f"Found {len(dict_ix)} dictionary videos for the keyword {keyword}.")
 
-    dict_features = np.array(bsldict_metadata["videos"]["features"]["mlp"])[dict_ix]    # out of the model for dict videos
+    # out of the model for dict videos
+    if mlp:
+        dict_features = np.array(bsldict_metadata["videos"]["features"]["mlp"])[dict_ix]
+    else:
+        dict_features = np.array(bsldict_metadata["videos"]["features"]["i3d"])[dict_ix]
+
     dict_video_urls = np.array(bsldict_metadata["videos"]["video_link_db"])[dict_ix]    # URLS of corresponding videos
     dict_youtube_ids = np.array(bsldict_metadata["videos"]["youtube_identifier_db"])[dict_ix]   # Some datas are on YT
 
@@ -194,7 +147,16 @@ def main(
 
     # Group clips into batches --> to feed the model batch by batch
     num_batches = math.ceil(num_clips / batch_size)
-    continuous_features = np.empty((0, embd_dim), dtype=float)  # contain the output of the model for all batches
+
+
+    # contain the output of the model for all batches
+    if mlp:
+        print("Using the I3D + MLP model")
+        continuous_features = np.empty((0, embd_dim_mlp), dtype=float)
+    else:
+        print("Using the I3D model only")
+        continuous_features = np.empty((0, embd_dim_i3d), dtype=float)
+
 
 
 
@@ -207,10 +169,14 @@ def main(
         # Forward pass
         out = model(inp)
         # Append the solution to the continous_features
-        continuous_features = np.append(
-            continuous_features, out["embds"].cpu().detach().numpy(), axis=0
-        )
-
+        if mlp:
+            continuous_features = np.append(
+                continuous_features, out["embds"].cpu().detach().numpy(), axis=0
+            )
+        else:
+            continuous_features = np.append(
+                continuous_features, out["logits"].cpu().detach().numpy(), axis=0
+            )
 
 
     #===========================================================================
@@ -291,7 +257,7 @@ if __name__ == "__main__":
     p.add_argument(
         "--input_path",
         type=Path,
-        default="sample_data/input.mp4",
+        default="sample_data/inputs/input_apple.mp4",
         help="Path to test video.",
     )
     p.add_argument(
@@ -345,7 +311,19 @@ if __name__ == "__main__":
         "--fps", type=int, default=25, help="The frame rate at which to read the video",
     )
     p.add_argument(
-        "--embd_dim",
+        "--mlp",
+        type=bool,
+        default=1,
+        help="if true, using the mlp output for computation esle i3d.",
+    )
+    p.add_argument(
+        "--embd_dim_i3d",
+        type=int,
+        default=1024,
+        help="The feature dimensionality, 1024 for the i3d model output.",
+    )
+    p.add_argument(
+        "--embd_dim_mlp",
         type=int,
         default=256,
         help="The feature dimensionality, 256 for the mlp model output.",
