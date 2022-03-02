@@ -69,7 +69,12 @@ The contents of `bsldict_v1.pkl` file is structured as follows:
 ```
 
 
-The contents of `info_v00_20.03.30.pkl` file is structured as follows:
+The contents of `bsldict_v2_i3d` file is approximately the same as `bsldict_v1.pkl` but 
+there are 14210 videos and 9283 words labelled. 
+
+There are only I3D features from different model (different training) :  
+
+It is structured as follows:
 
 ``` bash
 {
@@ -120,6 +125,7 @@ The contents of `info_v00_20.03.30.pkl` file is structured as follows:
             duration_sec        # seconds
             fps                 # frames per second
         }
+        
         # Dictionary containing video resolution information for our preprocessed version
         # Resized such that the height is 360 pixels, resampled at 25 fps
         ["videos_360h_25fps"]{
@@ -129,8 +135,21 @@ The contents of `info_v00_20.03.30.pkl` file is structured as follows:
             duration_sec        # seconds
             fps                 # frames per second
         }
+        ["videos_360h_25fps"]{
+            T                   # number of frames
+            H                   # height, 360
+            W                   # width
+            duration_sec        # seconds
+            fps                 # frames per second
+        }
         
-         # TO BE ANALYZED
+        # Dictionary containing our I3Ds feature extractions
+        ["features"]{
+            i3d_bobsl           # 1024-dimensional I3D (bobsl) features
+            i3d_bsl1k           # 1024-dimensional I3D (bsl1k) features
+        }
+        
+        # TO BE ANALYZED (SAME AS ["videos_original"])
         T  --  <class 'list'>
         W  --  <class 'list'>
         H  --  <class 'list'>
