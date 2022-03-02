@@ -521,13 +521,14 @@ def color_normalize(x: torch.Tensor, mean: torch.Tensor, std: torch.Tensor) -> t
 
 #=================== Model loading ===================
 
-def load_model(checkpoint_path: Path) -> torch.nn.Module:
+def load_model(checkpoint_path: Path, return_i3d_embds: bool) -> torch.nn.Module:
     """
     Load pre-trained checkpoint, put in eval mode.
 
     :param checkpoint_path: path of i3d_mlp model
+    :param return_i3d_embds: whether to return the intermediate i3d embeddings from the i3d_mlp model
     """
-    model = i3d_mlp()
+    model = i3d_mlp(return_i3d_embds=return_i3d_embds)
     checkpoint = torch.load(str(checkpoint_path))
     model.load_state_dict(checkpoint)
     # model = torch.nn.DataParallel(model)  # .cuda()
