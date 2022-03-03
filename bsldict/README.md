@@ -111,7 +111,8 @@ It is structured as follows:
         video_link_db           # link to the video file (either .mp4 file or youtube link)
         source_site_db          # Signstation, Scottish Sensory Centre, QIA Dictionary of ICT,  Nathanael Farley, University of Wolverhampton, Karl O'Keeffe ... (might be missing)
         download_method_db      # wget | youtube-dl
-        upload_date_db          # upload date (might be missing)
+        youtube_identifier_db   # youtube id if a youtube link, None otherwise
+        upload_date_db          # upload date (might be missing)        
         
         # The following two items are from our extractions using OpenPose
         bbox                    # normalised [0, 1] bounding box coordinates [y0, x0, y1, x1]
