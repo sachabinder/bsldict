@@ -262,7 +262,7 @@ if __name__ == "__main__":
     p.add_argument(
         "--viz_with_dict",
         type=bool,
-        default=1,
+        default=0,
         help="Whether to download dictionary videos for visualization.",
     )
     p.add_argument(
@@ -302,7 +302,7 @@ if __name__ == "__main__":
         "--mlp",
         type=bool,
         default=0,
-        help="if true, using the mlp output for computation esle i3d.",
+        help="if true, using the mlp output for computation else i3d.",
     )
     p.add_argument(
         "--embd_dim",

@@ -529,9 +529,61 @@ def load_model(checkpoint_path: Path) -> torch.nn.Module:
     :param checkpoint_path: path of i3d_mlp model
     :param return_i3d_embds: whether to return the intermediate i3d embeddings from the i3d_mlp model
     """
-    model = InceptionI3d(num_classes=2281, num_in_frames=16, include_embds=True)
-    checkpoint = torch.load(str(checkpoint_path))
+    model = InceptionI3d(num_classes=1065, num_in_frames=16, include_embds=True)
+    checkpoint = torch.load(str(checkpoint_path), map_location=torch.device('cpu'))
     model.load_state_dict(checkpoint)
     # model = torch.nn.DataParallel(model)  # .cuda()
     model.eval() # for evaluation safety
     return model
+
+
+def load_checkpoint_flexible(chekcpoint_path, model):
+    msg = f"no pretrained model found at {chekcpoint_path}"
+    assert Path(chekcpoint_path).exists(), msg
+    print(f"=> loading checkpoint '{chekcpoint_path}'")
+    checkpoint = torch.load(chekcpoint_path, map_location=torch.device('cpu'))  # might need to add map_location
+
+    # This part handles ignoring the last layer weights if there is mismatch
+    partial_load = False
+    if "state_dict" in checkpoint:
+        pretrained_dict = checkpoint["state_dict"]
+    else:
+        print("State_dict key not found, attempting to use the checkpoint:")
+        pretrained_dict = checkpoint
+
+    # If the pretrained model is not torch.nn.DataParallel(model), append 'module.' to keys.
+    if "module" not in sorted(pretrained_dict.keys())[0]:
+        print('Appending "module." to pretrained keys.')
+        pretrained_dict = dict(("module." + k, v) for (k, v) in pretrained_dict.items())
+
+    model_dict = model.state_dict()
+
+    for k, v in pretrained_dict.items():
+        if not ((k in model_dict) and v.shape == model_dict[k].shape):
+            print(f"Unused from pretrain {k}, pretrain: {v.shape}")
+            partial_load = True
+
+    for k, v in model_dict.items():
+        if k not in pretrained_dict:
+            print(f"Missing in pretrain {k}")
+            partial_load = True
+
+    if partial_load:
+        print("Removing or not initializing some layers...")
+        # 1. filter out unnecessary keys
+        pretrained_dict = {
+            k: v
+            for k, v in pretrained_dict.items()
+            if (k in model_dict) and (v.shape == model_dict[k].shape)
+        }
+        # 2. overwrite entries in the existing state dict
+        model_dict.update(pretrained_dict)
+        # 3. load the new state dict
+        model.load_state_dict(model_dict)
+
+    else:
+        print("Loading state dict.")
+        model.load_state_dict(checkpoint["state_dict"])
+
+    del checkpoint, pretrained_dict
+    return partial_load

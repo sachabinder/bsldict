@@ -17,7 +17,7 @@ import numpy as np  # modules for basic tensors, scientific computation
 import torch        # PyTorch, module for NN, models, passforward....
 from sklearn.metrics import pairwise_distances  # module to compute distances
 from tqdm import tqdm   # module to display loading bar
-
+import sys
 
 # see utils.py for the complete documentation
 from utils import (
@@ -26,8 +26,12 @@ from utils import (
     prepare_input,
     sliding_windows,
     viz_similarities,
+    load_checkpoint_flexible
 )
 
+sys.path.append("..")
+#=================== Importation of the model framework ===================
+from models.i3d import InceptionI3d
 
 ############# MAIN FUNCTION #############
 def main(
@@ -99,7 +103,7 @@ def main(
     print(f"Found {len(dict_ix)} dictionary videos for the keyword {keyword}.")
 
     # out of the model for dict videos
-    dict_features = np.array(bsldict_metadata["videos"]["features"]["i3d_bobsl"])[dict_ix]
+    dict_features = np.array(bsldict_metadata["videos"]["features"]["i3d_bsl1k"])[dict_ix]
 
     dict_video_urls = np.array(bsldict_metadata["videos"]["video_link_db"])[dict_ix]    # URLS of corresponding videos
     dict_youtube_ids = np.array(bsldict_metadata["videos"]["youtube_identifier_db"])[dict_ix]   # Some datas are on YT
@@ -116,13 +120,16 @@ def main(
 
     # Loading the pretrained nural network
     print(f"Loading model from {checkpoint_path}")
-    model = load_model(checkpoint_path=checkpoint_path)  # function from utils.py that allow to load a pre-trained model (torch.nn)
+
+    model = InceptionI3d(num_classes=2281, num_in_frames=16, include_embds=True)
+    flag = load_checkpoint_flexible(str(checkpoint_path), model)
 
     # Hardware configuration
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")   # check if there is a GPU on the computer (if not, move to CPU)
     print(f"Moving model to {device}")
-    model = model.to(device)    # Torch function that moving the model on GPU (if there is) else on CPU
+    model = model.to(device)  # Torch function that moving the model on GPU (if there is) else on CPU
 
+    assert flag, "cela ne marche pas !"
 
     #=============================== INPUT VIDEO loading ===============================
     # Load the continuous RGB video INPUT from a Path to a Torch Tensor
@@ -157,7 +164,7 @@ def main(
         out = model(inp)
         # Append the solution to the continous_features
         continuous_features = np.append(
-            continuous_features, out["embds"].cpu().detach().numpy(), axis=0
+            continuous_features, out["embds"].cpu().detach().numpy()[:,:,0,0,0], axis=0
         )
 
 
@@ -221,7 +228,7 @@ if __name__ == "__main__":
     p.add_argument(
         "--checkpoint_path",
         type=Path,
-        default="i3d.pth.tar",
+        default="../models/bsl1k_i3d.pth.tar",
         help="Path to combined i3d_mlp model.",
     )
     p.add_argument(
@@ -239,7 +246,7 @@ if __name__ == "__main__":
     p.add_argument(
         "--input_path",
         type=Path,
-        default="sample_data/inputs/input_apple.mp4",
+        default="inputs/input.mp4",
         help="Path to test video.",
     )
     p.add_argument(
@@ -250,13 +257,13 @@ if __name__ == "__main__":
     p.add_argument(
         "--output_path",
         type=Path,
-        default="sample_data/output.mp4",
+        default="output.mp4",
         help="Path to save viz (if viz=1).",
     )
     p.add_argument(
         "--viz_with_dict",
         type=bool,
-        default=1,
+        default=0,
         help="Whether to download dictionary videos for visualization.",
     )
     p.add_argument(
@@ -290,7 +297,9 @@ if __name__ == "__main__":
         help="Number of frames processed at a time by the model",
     )
     p.add_argument(
-        "--fps", type=int, default=25, help="The frame rate at which to read the video",
+        "--fps", type=int,
+        default=25,
+        help="The frame rate at which to read the video",
     )
     p.add_argument(
         "--embd_dim",
