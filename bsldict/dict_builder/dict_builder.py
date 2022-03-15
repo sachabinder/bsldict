@@ -42,17 +42,22 @@ print("Data extracted")
 
 # create the new dictionary
 assert names_bobsl == names, f"The order of videos in {vInfo_file_path} and {mat_bobsl_path} is not maching"
-assert names_bobsl == names, f"The order of videos in {vInfo_file_path} and {mat_bsl1k} is not maching"
+assert names_bsl1k == names, f"The order of videos in {vInfo_file_path} and {mat_bsl1k} is not maching"
 
-data["videos"]["features"] = {"i3d_bobsl":features_bobsl, "i3d_bsl1k":features_bobsl}
+data["videos"]["features"] = {"i3d_bobsl":features_bobsl, "i3d_bsl1k":features_bsl1k}
 data["videos"]["youtube_identifier_db"] = [None]*len(names)
 
 
 # youtube id extraction
 ytdl_method_ix = np.where(np.array(data["videos"]["download_method_db"]) == "youtube-dl")[0]
 
+# correct yt link
+for i in ytdl_method_ix:
+    data["videos"]["video_link_db"][i] = data["videos"]["video_link_db"][i].split("//")[1]
+
 yt_links = np.array(data["videos"]["video_link_db"])[ytdl_method_ix]
-yt_id = [elt.split("/")[4].split("?")[0] for elt in yt_links]
+
+yt_id = [elt.split("/")[2].split("?")[0] for elt in yt_links]
 
 for i, id in zip(ytdl_method_ix, yt_id):
     data["videos"]["youtube_identifier_db"][i] = id

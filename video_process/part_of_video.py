@@ -98,10 +98,8 @@ def play_frame_by_frame(input_path: str):
 
 if __name__ == "__main__":
     file = "sample_data/input.mp4"  # input file path
-    parts = {"sample_data/input_apple.mp4": (110, 132),
-             "sample_data/input_garden.mp4": (75, 105),
-             "sample_data/input_tree.mp4": (125, 145)}  # part of videos to extract with file name "file_name":(begin, end)
+    parts = {"sample_data/input_apple_long.mp4": (90, 150)}  # part of videos to extract with file name "file_name":(begin, end)
 
-    # play_frame_by_frame(file)
+    #play_frame_by_frame(file)
 
     extract_part(file, parts)

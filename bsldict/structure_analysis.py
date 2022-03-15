@@ -15,7 +15,7 @@ def dict_structure(data: dict, marker: str = "  "):
             print(marker, key, " -- ", type(val))
 
 if __name__ == "__main__":
-    file_path1 = "bsldict_v2_i3d.pkl"
+    file_path1 = "../models/i3d.pth.tar"
 
     with open(file_path1, "rb") as f:  # "rb" : open a file with reading (r) in binary (b)
         data1 = pkl.load(f)  # load pkl : fichier binaire --> obj python

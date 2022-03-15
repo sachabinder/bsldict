@@ -442,6 +442,58 @@ def sliding_windows(rgb: torch.Tensor, num_in_frames: int, stride: int,) -> tupl
     return rgb_slided, np.array(t_mid)
 
 
+
+def frame_sampler(rgb: torch.Tensor, num_in_frames: int) -> tuple:
+    """
+    Return sampled windows and corresponding (middle) timestamp
+
+    :param rgb: RGB video
+    :param num_in_frames: number of frames processed at a time by the model
+    """
+
+    # videos characteristics : C (number of colors), nFrames (number of frames), H (height), W (width)
+    C, nFrames, H, W = rgb.shape
+
+    # If needed, pad to the minimum clip length (because the model will not be able to work otherwise)
+    if nFrames < num_in_frames:
+        rgb_ = torch.zeros(C, num_in_frames, H, W)
+        rgb_[:, :nFrames] = rgb
+        rgb_[:, nFrames:] = rgb[:, -1].unsqueeze(1)
+        rgb = rgb_
+        nFrames = rgb.shape[1]
+
+    num_clips = math.floor(nFrames/num_in_frames) + 1 # number of clips
+    assert num_clips > 0, f"Your input video of {nFrames} frame(s) cannot be sampled with {num_in_frames} frame(s) at " \
+                          f"the same time in the model."
+
+    plural = ""  # jsut for printing
+    # if there are enough images to have multiple clips
+    if num_clips > 1:
+        plural = "s"
+    print(f"{num_clips} clip{plural} resulted from sliding window processing.")
+
+    rgb_sampled = torch.zeros(num_clips, 3, num_in_frames, H, W)
+    t_mid = []
+
+    # For each clip
+    for j in range(num_clips):
+        # Check if num_clips becomes 0
+        actual_clip_length = min(num_in_frames, nFrames - j * num_in_frames)
+
+        # compute beginning time
+        if actual_clip_length == num_in_frames:
+            t_beg = j * num_in_frames  # if the t_beg + num_in_frame <= nFrames, no problem
+        else:
+            t_beg = nFrames - num_in_frames  # we loop on the end of video
+
+        t_mid.append(t_beg + num_in_frames / 2)  # append middle time of each clips
+
+        rgb_sampled[j] = rgb[:, t_beg: t_beg + num_in_frames, :, :]  # append slided windows
+
+    return rgb_sampled, np.array(t_mid)
+
+
+
 def im_to_numpy(img: torch.Tensor) -> np.ndarray:
     """
     Convert a torch.Tensor image on a numpy array image.
@@ -522,68 +574,20 @@ def color_normalize(x: torch.Tensor, mean: torch.Tensor, std: torch.Tensor) -> t
 
 #=================== Model loading ===================
 
-def load_model(checkpoint_path: Path) -> torch.nn.Module:
+def load_model(checkpoint_path: Path, device: torch.device, num_classes: int = 1064) -> torch.nn.Module:
     """
     Load pre-trained checkpoint, put in eval mode.
 
     :param checkpoint_path: path of i3d_mlp model
-    :param return_i3d_embds: whether to return the intermediate i3d embeddings from the i3d_mlp model
+    :param device: GPU or CPU to move all computation process on adapted device
+    :param num_classes: it depends on which model is loaded 1064 if BSL1K, 2281 if BOBSL
     """
-    model = InceptionI3d(num_classes=1065, num_in_frames=16, include_embds=True)
-    checkpoint = torch.load(str(checkpoint_path), map_location=torch.device('cpu'))
+    # load architecture
+    model = InceptionI3d(num_classes=num_classes, num_in_frames=16, include_embds=True)
+
+    # checkpoint = torch.load(str(checkpoint_path), map_location=device)    # for old I3D
+    checkpoint = torch.load(str(checkpoint_path), map_location=device)["state_dict"]    # for new I3Ds
+    model = torch.nn.DataParallel(model)    # Adapt the model to data parallel training
     model.load_state_dict(checkpoint)
-    # model = torch.nn.DataParallel(model)  # .cuda()
     model.eval() # for evaluation safety
     return model
-
-
-def load_checkpoint_flexible(chekcpoint_path, model):
-    msg = f"no pretrained model found at {chekcpoint_path}"
-    assert Path(chekcpoint_path).exists(), msg
-    print(f"=> loading checkpoint '{chekcpoint_path}'")
-    checkpoint = torch.load(chekcpoint_path, map_location=torch.device('cpu'))  # might need to add map_location
-
-    # This part handles ignoring the last layer weights if there is mismatch
-    partial_load = False
-    if "state_dict" in checkpoint:
-        pretrained_dict = checkpoint["state_dict"]
-    else:
-        print("State_dict key not found, attempting to use the checkpoint:")
-        pretrained_dict = checkpoint
-
-    # If the pretrained model is not torch.nn.DataParallel(model), append 'module.' to keys.
-    if "module" not in sorted(pretrained_dict.keys())[0]:
-        print('Appending "module." to pretrained keys.')
-        pretrained_dict = dict(("module." + k, v) for (k, v) in pretrained_dict.items())
-
-    model_dict = model.state_dict()
-
-    for k, v in pretrained_dict.items():
-        if not ((k in model_dict) and v.shape == model_dict[k].shape):
-            print(f"Unused from pretrain {k}, pretrain: {v.shape}")
-            partial_load = True
-
-    for k, v in model_dict.items():
-        if k not in pretrained_dict:
-            print(f"Missing in pretrain {k}")
-            partial_load = True
-
-    if partial_load:
-        print("Removing or not initializing some layers...")
-        # 1. filter out unnecessary keys
-        pretrained_dict = {
-            k: v
-            for k, v in pretrained_dict.items()
-            if (k in model_dict) and (v.shape == model_dict[k].shape)
-        }
-        # 2. overwrite entries in the existing state dict
-        model_dict.update(pretrained_dict)
-        # 3. load the new state dict
-        model.load_state_dict(model_dict)
-
-    else:
-        print("Loading state dict.")
-        model.load_state_dict(checkpoint["state_dict"])
-
-    del checkpoint, pretrained_dict
-    return partial_load
