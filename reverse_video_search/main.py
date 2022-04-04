@@ -211,6 +211,52 @@ def video_record(file_name:str):
     cv2.destroyAllWindows()
 
 
+def generate_html(
+    filename,
+    web_dir,
+    videoname,
+    word_gt,
+    word_pred,
+    score,
+    is_correct,
+    video_dir,
+    show_order,
+    show_if_false=True,
+    num_videos_to_show=100,
+):
+    """
+    Generate an HTML page with the results
+
+    """
+    print(f"Saving to {web_dir}/{filename}")
+    webpage = browser.HTMLBrowser(
+        title=filename,
+        refresh=True,
+        filename=filename,
+        web_dir=web_dir,
+        header_template_path=None,
+    )
+    vids = []
+    txts = []
+    links = []
+    cnt = 0
+    for i in show_order:
+        if (not show_if_false) or (not is_correct[i]):
+            if cnt == num_videos_to_show:
+                break
+            cnt += 1
+            video_path = os.path.join(video_dir, f"{videoname[i]}")
+            display_text = (
+                f"({cnt}) Pred: {word_pred[i]} ({score[i]:.3f}) GT: {word_gt[i]}"
+            )
+            vids.append(video_path)
+            txts.append(display_text)
+            links.append(word_pred[i])
+
+    webpage.add_videos(vids, txts, links, width=250, cols_per_row=4, loop=0)
+    webpage.save()
+
+
 if __name__ == "__main__":
 
     file_name = "inputs/input-" + time.strftime("%Y%m%d-%H%M%S" + ".mp4")
