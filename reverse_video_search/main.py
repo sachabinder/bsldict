@@ -16,6 +16,9 @@ import torch        # PyTorch, module for NN, models, passforward....
 from sklearn.metrics import pairwise_distances  # module to compute distances
 from tqdm import tqdm   # module to display loading bar
 import sys
+import cv2
+import time
+import browser
 
 # see utils.py for the complete documentation
 from utils import (
@@ -35,6 +38,7 @@ def main(
     bsldict_metadata_path: Path,
     input_path: Path,
     batch_size: int,
+    keyword: str,
     num_top: int = 20,
     num_classes: int = 1064,
     num_in_frames: int = 16,
@@ -75,12 +79,14 @@ def main(
     with open(bsldict_metadata_path, "rb") as f:    #"rb" : open a file with reading (r) in binary (b)
         bsldict_metadata = pkl.load(f)  #load pkl : fichier binaire --> obj python
 
+    dict_ix = np.where(np.array(bsldict_metadata["videos"]["word"]) == keyword)[0]
     # out of the model for dict videos
-    dict_features = np.array(bsldict_metadata["videos"]["features"]["i3d_bsl1k"])
+    dict_features = np.array(bsldict_metadata["videos"]["features"]["i3d_bobsl"])
 
-    dict_words = np.array(bsldict_metadata["videos"]["word"])  # dict words
-    dict_video_urls = np.array(bsldict_metadata["videos"]["video_link_db"])  # URLS of corresponding videos
+    dict_words = np.array(bsldict_metadata["videos"]["word"]) # dict words
+    dict_video_urls = np.array(bsldict_metadata["videos"]["video_link_db"]) # URLS of corresponding videos
 
+    del bsldict_metadata
 
     #=============================== MODEL loading ===============================
     # Check if the model is downloaded
@@ -104,9 +110,14 @@ def main(
     # Prepare: function of utils.py that resize to [256x256], center crop with [224x224], normalize colors in [-0.5;+ 0.5]
     rgb_input = prepare_input(rgb_orig)
 
+    del rgb_orig
+
     # Sampling rgb : rgb_samples (sampling of video) and t_mid (corresponding (middle) timestamp)
     # It produce a tensor of num_clips of clips (each of num_in_frames frame) in RGB with rgb_input[i,j] shapes
     rgb_samples, t_mid = frame_sampler(rgb=rgb_input, num_in_frames=num_in_frames)
+    #rgb_samples, t_mid = sliding_windows(rgb=rgb_input, num_in_frames=num_in_frames, stride=2)
+
+    del rgb_input
 
     # Number of windows/clips
     num_clips = rgb_samples.shape[0]
@@ -133,7 +144,6 @@ def main(
             continuous_features, out["embds"].cpu().detach().numpy()[:,:,0,0,0], axis=0
         )
 
-
     #===========================================================================
     #========================= compaire the output with the dict ===============
     #===========================================================================
@@ -144,26 +154,79 @@ def main(
     sim = 1 - dst / 2
 
     # Associate the video to a single probability
-    # avg_sim = np.mean(sim, axis=0)  # taking the average of all clips
-
+    #avg_sim = np.mean(sim, axis=0)  # taking the average of all clips
     avg_sim = np.max(sim, axis=0)   # taking the proba max of all clips
-
 
     # sort the array and get indexes of the corresponding videos
     version_sorted_ix = np.flip(np.argsort(avg_sim, kind='quicksort'))
 
-    for i in range(num_top):
-        print(dict_words[version_sorted_ix[i]], " -- ", avg_sim[version_sorted_ix[i]], " -- ",
-              dict_video_urls[version_sorted_ix[i]])
+
+    if keyword != "NO_KEYWORD_TO_SPOT":
+        for elt in dict_ix:
+            print(dict_words[elt], " -- rank :", np.where(version_sorted_ix == elt)[0][0], " -- p = ", avg_sim[elt])
+    else:
+        for i in range(num_top):
+             print(dict_words[version_sorted_ix[i]], " -- ", avg_sim[version_sorted_ix[i]], " -- ",
+                   dict_video_urls[version_sorted_ix[i]])
+
+
+def video_record(file_name:str):
+    cap = cv2.VideoCapture(0)
+    FOURCC = "mp4v"
+    fourcc = cv2.VideoWriter_fourcc(*FOURCC)
+
+    assert cap.isOpened() == True, "Cannot connect to the camera"
+
+    w = int(cap.get(3))
+    h = int(cap.get(4))
+
+    flag_record = False
+
+    output = cv2.VideoWriter(file_name, fourcc, 25, (h, h))
+
+    while (True):
+        ret, frame = cap.read()
+        cropped_frame = frame[:, w // 2 - h // 2:w // 2 + h // 2]
+
+        if flag_record or cv2.waitKey(1) & 0xFF == ord(' '):
+            flag_record = True
+
+            output.write(cropped_frame)
+
+            cv2.circle(cropped_frame, (h - h // 12, h // 12), 10, (0, 0, 254), -1)
+            cv2.putText(cropped_frame, "REC", (h - h // 12 - 80, h // 12 + 10), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                        (0, 0, 254), 2)
+        else:
+            cv2.circle(cropped_frame, (h - h // 12, h // 12), 10, (0, 254, 0), -1)
+            cv2.putText(cropped_frame, "STDBY", (h - h // 12 - 120, h // 12 + 10), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                        (0, 254, 0), 2)
+
+        cv2.imshow('Frame', cropped_frame)
+
+        if cv2.waitKey(1) & 0xFF == ord(' '):
+            break
+
+    cap.release()
+    output.release()
+    cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
+
+    file_name = "inputs/input-" + time.strftime("%Y%m%d-%H%M%S" + ".mp4")
+
     p = argparse.ArgumentParser(description="Helper script to run main.")
     p.add_argument(
         "--checkpoint_path",
         type=Path,
-        default="../models/bsl1k_i3d.pth.tar",
+        default="../models/bobsl_i3d.pth.tar",
         help="Path to i3d model.",
+    )
+    p.add_argument(
+        "--keyword",
+        type=str,
+        default="NO_KEYWORD_TO_SPOT",
+        help="Spot a particular word",
     )
     p.add_argument(
         "--bsldict_metadata_path",
@@ -174,7 +237,7 @@ if __name__ == "__main__":
     p.add_argument(
         "--input_path",
         type=Path,
-        default="inputs/input_apple.mp4",
+        default=file_name,
         help="Path to input video.",
     )
     p.add_argument(
@@ -192,7 +255,7 @@ if __name__ == "__main__":
     p.add_argument(
         "--num_classes",
         type=int,
-        default=1064,
+        default=2281,
         help="It depends on which model is loaded 1064 if BSL1K, 2281 if BOBSL",
     )
     p.add_argument(
@@ -213,4 +276,15 @@ if __name__ == "__main__":
         help="The feature dimensionality, 1024 for the i3d model output or 256 for the MLP model output.",
     )
 
+
+    if str(p.parse_args().input_path) == file_name:
+        video_record(file_name)
+
     main(**vars(p.parse_args()))
+
+
+
+
+
+
+

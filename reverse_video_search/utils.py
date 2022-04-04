@@ -382,11 +382,13 @@ def prepare_input(
 
     # Crop 256x256
     rgb = rgb[:, :, uly : uly + inp_res, ulx : ulx + inp_res]
+
     rgb = to_torch(rgb).float()
     assert rgb.max() <= 1
 
     # normalization
     rgb = color_normalize(rgb, mean, std)
+
     return rgb
 
 
@@ -587,6 +589,7 @@ def load_model(checkpoint_path: Path, device: torch.device, num_classes: int = 1
 
     # checkpoint = torch.load(str(checkpoint_path), map_location=device)    # for old I3D
     checkpoint = torch.load(str(checkpoint_path), map_location=device)["state_dict"]    # for new I3Ds
+    #checkpoint = torch.load(str(checkpoint_path), map_location=device) # for old I3Ds
     model = torch.nn.DataParallel(model)    # Adapt the model to data parallel training
     model.load_state_dict(checkpoint)
     model.eval() # for evaluation safety
