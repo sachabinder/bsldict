@@ -130,6 +130,13 @@ def main(
     continuous_features = np.empty((0, embd_dim), dtype=float)
 
 
+    with open("../vocabs/vocab_2281.pkl", "rb") as f:
+        logits_words = pkl.load(f)["words"]
+
+
+    isolated_logits = np.empty((0, len(logits_words)), dtype=float)
+
+
     #=================================================================================
     #=============================== Feeding the model ===============================
     #=================================================================================
@@ -143,6 +150,8 @@ def main(
         continuous_features = np.append(
             continuous_features, out["embds"].cpu().detach().numpy()[:,:,0,0,0], axis=0
         )
+        isolated_logits = np.append(isolated_logits, out["logits"].cpu().detach().numpy(), axis=0)
+
 
     #===========================================================================
     #========================= compaire the output with the dict ===============
@@ -156,9 +165,11 @@ def main(
     # Associate the video to a single probability
     #avg_sim = np.mean(sim, axis=0)  # taking the average of all clips
     avg_sim = np.max(sim, axis=0)   # taking the proba max of all clips
+    avg_logits = np.max(isolated_logits, axis=0)
 
     # sort the array and get indexes of the corresponding videos
     version_sorted_ix = np.flip(np.argsort(avg_sim, kind='quicksort'))
+    logits_version_sorted_ix = np.flip(np.argsort(avg_logits, kind='quicksort'))
 
 
     if keyword != "NO_KEYWORD_TO_SPOT":
@@ -168,6 +179,12 @@ def main(
         for i in range(num_top):
              print(dict_words[version_sorted_ix[i]], " -- ", avg_sim[version_sorted_ix[i]], " -- ",
                    dict_video_urls[version_sorted_ix[i]])
+
+    print("\n\n##################################################\n\n")
+
+    for i in range(num_top):
+        print(logits_words[logits_version_sorted_ix[i]], " -- ", avg_logits[logits_version_sorted_ix[i]])
+
 
 
 def video_record(file_name:str):
@@ -212,6 +229,7 @@ def video_record(file_name:str):
 
 
 if __name__ == "__main__":
+
 
     file_name = "inputs/input-" + time.strftime("%Y%m%d-%H%M%S" + ".mp4")
 
@@ -281,10 +299,3 @@ if __name__ == "__main__":
         video_record(file_name)
 
     main(**vars(p.parse_args()))
-
-
-
-
-
-
-
