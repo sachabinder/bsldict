@@ -9,7 +9,7 @@ import math         # maths things
 import os           # interact with the os
 import pickle as pkl    # to save any Python object on a binary file (pickle.dump(myObj, myFile) to save, pickle.load(myFile) to load
 from pathlib import Path    # to navigate through files tree
-
+from scipy.io import loadmat
 import cv2          # OpenCV : computer vision / image processing library
 import numpy as np  # modules for basic tensors, scientific computation
 import torch        # PyTorch, module for NN, models, passforward....
@@ -36,9 +36,10 @@ sys.path.append("..")
 def main(
     checkpoint_path: Path,
     bsldict_metadata_path: Path,
+    bsldict_features_path,
     input_path: Path,
-    batch_size: int,
     keyword: str,
+    batch_size: int,
     num_top: int = 20,
     num_classes: int = 1064,
     num_in_frames: int = 16,
@@ -71,22 +72,28 @@ def main(
 
     #=============================== BSLDict loading ===============================
     # check if the BSLDict is downloaded
-    msg = "Please download the BSLDict metadata at bsldict/download_bsldict_metadata.sh"
+    msg = "Please check the BSLDict metadata"
     assert bsldict_metadata_path.exists(), msg
 
-    print(f"Loading BSLDict data (words & features) from {bsldict_metadata_path}")
+    print(f"Loading BSLDict metadata from {bsldict_metadata_path}")
 
     with open(bsldict_metadata_path, "rb") as f:    #"rb" : open a file with reading (r) in binary (b)
         bsldict_metadata = pkl.load(f)  #load pkl : fichier binaire --> obj python
-
     dict_ix = np.where(np.array(bsldict_metadata["videos"]["word"]) == keyword)[0]
-    # out of the model for dict videos
-    dict_features = np.array(bsldict_metadata["videos"]["features"]["i3d_bobsl"])
-
     dict_words = np.array(bsldict_metadata["videos"]["word"]) # dict words
     dict_video_urls = np.array(bsldict_metadata["videos"]["video_link_db"]) # URLS of corresponding videos
-
     del bsldict_metadata
+
+    # check if the features are downloaded
+    msg = "Please check the BSLDict featrues"
+    assert bsldict_features_path.exists(), msg
+
+    print(f"Loading BSLDict features from {bsldict_features_path}")
+
+    mat = loadmat(bsldict_features_path)
+    # out of the model for dict videos
+    dict_features = [list(elt) for elt in mat["vid_features"]]
+    del mat
 
     #=============================== MODEL loading ===============================
     # Check if the model is downloaded
@@ -265,14 +272,8 @@ if __name__ == "__main__":
     p.add_argument(
         "--checkpoint_path",
         type=Path,
-        default="../models/bobsl_i3d.pth.tar",
+        default="../models/bsl1k_bobsl/i3d.pth.tar",
         help="Path to i3d model.",
-    )
-    p.add_argument(
-        "--keyword",
-        type=str,
-        default="NO_KEYWORD_TO_SPOT",
-        help="Spot a particular word",
     )
     p.add_argument(
         "--bsldict_metadata_path",
@@ -281,10 +282,22 @@ if __name__ == "__main__":
         help="Path to bsldict data",
     )
     p.add_argument(
+        "--bsldict_features_path",
+        type=Path,
+        default="../models/bsl1k_bobsl/bsldict_features.mat",
+        help="Path to bsldict data",
+    )
+    p.add_argument(
         "--input_path",
         type=Path,
         default=file_name,
         help="Path to input video.",
+    )
+    p.add_argument(
+        "--keyword",
+        type=str,
+        default="NO_KEYWORD_TO_SPOT",
+        help="Spot a particular word",
     )
     p.add_argument(
         "--batch_size",
