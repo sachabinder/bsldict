@@ -2,23 +2,31 @@ import dominate
 import numpy as np
 from dominate.tags import (a, attr, br, div, h3, h4, img, input_, meta, p,
                            source, span, table, tbody, td, th, thead, tr,
-                           track, video)
+                           track, video, iframe)
 from dominate.util import raw, text
 
 
 class HTMLBrowser:
     def __init__(
         self,
-        web_dir,
-        title,
+        web_dir: str,
+        title: str,
         header_template_path=None,
-        filename="index.html",
-        refresh=False,
+        filename: str ="index.html",
+        refresh: bool = False,
     ):
+        """
+        Constructor
+        :param web_dir: dir where the .html file will be save
+        :param title: title of the web page
+        :param header_template_path: path of a template for the header
+        :param filename: name of the file
+        :param refresh: refresh the webpage automatically if true
+        """
+
         self.title = title
         self.filename = filename
         self.web_dir = web_dir
-        self.filename = self.filename
         # self.web_dir.mkdir(exist_ok=True, parents=True)
         self.doc = dominate.document(title=title)
         if refresh > 0:
@@ -34,25 +42,51 @@ class HTMLBrowser:
         self.doc.add(self.body)
         self.table = None
 
-    def add_title(self, title_text):
-        """Insert a header to the HTML file
-        Parameters:
-            text (str) -- the header text
+
+    def add_title(self, title_text: str):
+        """
+        Insert a header to the HTML file
+        :param title_text: the header text
         """
         with self.body:
             h4(title_text)
 
-    def add_text(self, text_str):
+
+    def add_text(self, text_str: str):
+        """
+        Insert a text to the HTML file
+        :param text_str: text
+        """
         with self.body:
             raw(f"{text_str}<br>")
 
-    def add_text_to_new_section(self, text_strs):
+
+    def add_text_to_new_section(self, text_strs: list):
+        """
+        Insert list of text in a new sections (paragraphs)
+        :param text_strs: list of str
+        """
         with self.body:
             with div(cls="twelve columns"):
                 for text_str in text_strs:
                     raw(f"{text_str}<br>")
 
-    def add_stats(self, keys, links, probs, refs, thresholds, header=None):
+
+    def add_stats(self, keys: list, links: list, probs: list , refs: list, thresholds: list, header=None):
+        """
+        Insert an array of prediction on file
+        strucutre
+                tresh 1     tresh 2     tresh 3     total (or table)      in signbank
+        word 1     1           0           0          1
+        word 2     1           1           1          1
+        word 3     1           1           0          1
+
+        :param keys:
+        :param links:
+        :param probs:
+        :param refs:
+        :param thresholds:
+        """
         with self.body:
             with div(cls="three columns"):
                 if header:
@@ -78,8 +112,9 @@ class HTMLBrowser:
                                 else:
                                     td()
 
+
     def add_videos(
-        self, vids, txts, links, subs=None, width=320, cols_per_row=8, loop=1
+        self, vids, txts, links, yt_ids, subs=None, width=320, cols_per_row=8, loop=1
     ):
         """add images to the HTML file
         Parameters:
@@ -101,7 +136,7 @@ class HTMLBrowser:
         current_row = tr()
         tb = tbody()
         count = 0
-        for (vid, txt, link, subtitle_link) in zip(vids, txts, links, subs):
+        for (vid, txt, link, subtitle_link, yt_id) in zip(vids, txts, links, subs, yt_ids):
             tdata = td(halign="center", valign="top")
             para = p()
             # if not (self.web_dir / vid.split("#t")[0]).exists():
@@ -115,25 +150,38 @@ class HTMLBrowser:
                 offset = "0"
             with para:
                 with a(href=str(link)):
-                    with video(offset=offset):
-                        kwargs = {
-                            "preload": "auto",
-                            "controls": "controls",
-                            "autoplay": "autoplay",
-                            "width": f"{width}px",
-                        }
-                        if loop:
-                            kwargs["loop"] = "loop"
-                        attr(**kwargs)
-                        source(src=vid_path, type="video/mp4")
-                        if subtitle_link:
-                            track(
-                                src=subtitle_link,
-                                kind="subtitles",
-                                label="English",
-                                srclang="en",
-                                default="default",
-                            )
+                    if yt_id == None:
+                        with video(offset=offset):
+                            kwargs = {
+                                "preload": "auto",
+                                "controls": "controls",
+                                "autoplay": "autoplay",
+                                "width": f"{width}px",
+                            }
+                            if loop:
+                                kwargs["loop"] = "loop"
+                            attr(**kwargs)
+                            source(src=vid_path, type="video/mp4")
+                            if subtitle_link:
+                                track(
+                                    src=subtitle_link,
+                                    kind="subtitles",
+                                    label="English",
+                                    srclang="en",
+                                    default="default",
+                                )
+                    else:
+                        with iframe(offset=offset):
+                            kwargs = {
+                                #"width":"420",
+                                #"height":"315",
+                                "src":f"https://www.youtube.com/embed/{yt_id}?autoplay=1&mute=1",
+                                "allow":"autoplay; encrypted-media",
+                                "allowfullscreen": "1"
+                            }
+                            if loop:
+                                kwargs["loop"] = "loop"
+                            attr(**kwargs)
                 br()
                 text_rows = txt.split("<br>")
                 for color_idx, row in enumerate(text_rows):
@@ -186,8 +234,11 @@ class HTMLBrowser:
                             )
         self.body.add(player_div)
 
+
     def save(self):
-        """save the current content to the HMTL file"""
+        """
+        save the current content to the HMTL file
+        """
         html_file = f"{self.web_dir}/{self.filename}"
         with open(html_file, "wt") as f:
             f.write(self.doc.render())

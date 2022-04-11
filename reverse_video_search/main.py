@@ -82,6 +82,7 @@ def main(
     dict_ix = np.where(np.array(bsldict_metadata["videos"]["word"]) == keyword)[0]
     dict_words = np.array(bsldict_metadata["videos"]["word"]) # dict words
     dict_video_urls = np.array(bsldict_metadata["videos"]["video_link_db"]) # URLS of corresponding videos
+    yt_ids = np.array(bsldict_metadata["videos"]["youtube_identifier_db"])
     del bsldict_metadata
 
     # check if the features are downloaded
@@ -177,6 +178,18 @@ def main(
                    dict_video_urls[version_sorted_ix[i]])
 
 
+
+    print("Saving html file")
+    generate_html(filename="result.html",
+    web_dir = "../",
+    video_word = dict_words,
+    video_prob = avg_sim,
+    order_sorted = version_sorted_ix,
+    video_url= dict_video_urls,
+    yt_ids = yt_ids,
+    num_videos_to_show=num_top)
+
+
 def video_record(file_name:str):
     cap = cv2.VideoCapture(0)
     FOURCC = "mp4v"
@@ -221,15 +234,12 @@ def video_record(file_name:str):
 def generate_html(
     filename,
     web_dir,
-    videoname,
-    word_gt,
-    word_pred,
-    score,
-    is_correct,
-    video_dir,
-    show_order,
-    show_if_false=True,
-    num_videos_to_show=100,
+    video_word,
+    video_prob,
+    order_sorted,
+    video_url,
+    yt_ids,
+    num_videos_to_show=20,
 ):
     """
     Generate an HTML page with the results
@@ -243,24 +253,38 @@ def generate_html(
         web_dir=web_dir,
         header_template_path=None,
     )
+
+    webpage.add_title("your results")
+    a = "reverse sign langage test - sacha et ines"
+    b = []
+    for k in range(10):
+        b.append(a)
+    webpage.add_text_to_new_section(b)
+
+    keys = ["qdsfsqdfsqdf"]*10
+    links = ["http://youtube.com/"]*10
+    probs = [0.7]*10
+    refs = [0,1,0,1,0,1,0,1,0,1]
+    thresholds = [0.1*k for k in range(50)]
+
+    webpage.add_stats(keys, links, probs, refs, thresholds)
+
+
+
     vids = []
     txts = []
     links = []
+    youtube_ids = []
     cnt = 0
-    for i in show_order:
-        if (not show_if_false) or (not is_correct[i]):
-            if cnt == num_videos_to_show:
-                break
-            cnt += 1
-            video_path = os.path.join(video_dir, f"{videoname[i]}")
-            display_text = (
-                f"({cnt}) Pred: {word_pred[i]} ({score[i]:.3f}) GT: {word_gt[i]}"
-            )
-            vids.append(video_path)
+    for i in range(num_videos_to_show):
+            display_text = f" Prediction n°: {i+1} ;  {video_word[order_sorted[i]]} ; p = ({video_prob[order_sorted[i]]:.3f})"
+            vids.append(video_url[order_sorted[i]])
             txts.append(display_text)
-            links.append(word_pred[i])
+            links.append(video_url[order_sorted[i]])
+            youtube_ids.append(yt_ids[order_sorted][i])
 
-    webpage.add_videos(vids, txts, links, width=250, cols_per_row=4, loop=0)
+    webpage.add_videos(vids, txts, links, yt_ids = youtube_ids, width=250, cols_per_row=4, loop=0)
+
     webpage.save()
 
 
